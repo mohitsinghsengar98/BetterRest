@@ -5,45 +5,84 @@
 //  Created by Mohit Sengar on 18/11/25.
 //
 
+import CoreML
 import SwiftUI
 
 struct ContentView: View {
-    @State private var sleepAmount: Double = 8.00
-    @State private var wakeUp = Date.now
+    @State private var wakeUp = defaultWakeTime
+    @State private var sleepAmount = 8.0
+    @State private var coffeeAmount = 1
+    @State private var alertTitle = ""
+    @State private var alertMessage = ""
+    @State private var showingAlert = false
+    
+    static var defaultWakeTime:Date {
+        var components = DateComponents()
+        components.hour = 7
+        components.minute = 0
+        return Calendar.current.date(from: components) ?? .now
+    }
     
     var body: some View {
-        VStack {
-            Text("Learning").font(.largeTitle)
-                .foregroundStyle(.blue)
-            
-            // Learning
-            VStack{
-                Stepper("Sleep Amount", value: $sleepAmount, in: 4...12, step: 0.25)
+        NavigationStack{
+            Form {
+                VStack(alignment: .leading, spacing:0 ){
+                    Text("When you want to wake up?").font(.headline)
+                    
+                    DatePicker("", selection: $wakeUp, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
                 
-                Text("Sleep Amount \(sleepAmount.formatted()) hours").font(.title)
+                VStack(alignment: .leading, spacing:0 ){
+                    Text("Desired amount of sleep?").font(.headline)
+                    
+                    Stepper("\(sleepAmount.formatted()) hours",value: $sleepAmount, in: 4...12, step: 0.25)
+                }
                 
-                DatePicker("Choose the Date - ", selection: $wakeUp)
-                
-                DatePicker("Choose the Date - ", selection: $wakeUp, displayedComponents: .hourAndMinute)
-                
-                DatePicker("", selection: $wakeUp)
-                
-                DatePicker("Choose the Date -", selection: $wakeUp) .labelsHidden()
-                
-                DatePicker("Please enter a date", selection: $wakeUp, in: Date.now...)
-                DatePicker("Please enter a date", selection: $wakeUp, in: ...Date.now)
-                
-                Text("Current Selected Date - \(wakeUp.formatted())").font(.title)
-                
-                Text(Date.now, format: .dateTime.hour().minute())
-                
-                Text(Date.now, format: .dateTime.day().month().year())
-                
-                Text(Date.now.formatted(date: .long, time: .shortened))
-                
+                VStack(alignment: .leading, spacing:0 ){
+                    Text("Daily coffee intake").font(.headline)
+                    
+                    //Stepper( coffeeAmount == 1 ? "\(coffeeAmount) cup" : "\(coffeeAmount) cups", value: $coffeeAmount, in: 1...20)
+                    Stepper("^[\(coffeeAmount) cup](inflect: true)", value: $coffeeAmount, in: 1...20)
+                }
+            }
+            .navigationTitle("Better Rest")
+            .toolbar{
+                Button("Calculate", action: calculateBedTime).buttonStyle(.borderedProminent)
+            }
+            .alert(alertTitle, isPresented: $showingAlert) {
+                Button("OK"){}
+            } message: {
+                Text(alertMessage)
             }
         }
-        .padding()
+    }
+    
+    func calculateBedTime(){
+        do {
+            let config = MLModelConfiguration()
+            let model = try SleepCalculator(configuration: config)
+            
+            // more code to come down here
+            let components = Calendar.current.dateComponents([.hour,.minute], from: wakeUp)
+            let hour = (components.hour ?? 0) * 60 * 60
+            let minute = (components.minute ?? 0) * 60
+            
+            let prediction = try model.prediction(wake: Double(hour + minute), estimatedSleep: sleepAmount, coffee: Double(coffeeAmount))
+            
+            let sleepTime = wakeUp - prediction.actualSleep
+            
+            alertTitle = "Your ideal sleep time is..."
+            alertMessage = sleepTime.formatted(date: .omitted, time: .shortened)
+            
+        }catch{
+            // something went wrong
+            alertTitle = "Error"
+            alertMessage = "Sorry, There was an error calculating your bed time."
+            
+        }
+        
+        showingAlert = true
     }
 }
 
